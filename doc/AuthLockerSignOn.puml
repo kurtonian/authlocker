@@ -1,0 +1,52 @@
+@startuml
+title AuthLocker Sign On Process
+
+actor User
+participant Client
+participant Server
+participant Database
+
+User->Client: Log On(email, password)
+
+Client->Server: RequestPublicKey
+Server-->Client: Response(public key)
+Client->Client: Verify Public Key Against Previous Logon Attempt
+alt public key does not match
+Client->User: Approve New Key
+	alt User Does Not Approve
+		User-->Client: Abort
+		Client-->User: Logon Failed!
+	else User Approves
+		User-->Client: Approved
+		Client->Client: Store Server's Public Key
+	end
+end
+Client->Client: Create Signon String
+note left
+	Create Hash of email & password.
+	Encrypt GUID:HASH:GUID using public key.
+end note
+Client->Server: CreateSession(email, signon string)
+Server->Server: Extract hash from signon string
+note left
+	Decrypt signon string using private key.
+	Extract HASH. (Remove GUIDs)
+end note
+Server->Server: Create verification hash
+note left
+	Create new hash of email & signon hash
+end note
+Server->Database: Get auth_hash from user table for email
+Database-->Server: auth_hash
+Server->Server: Compare verification hash against auth_hash
+alt hashes do not match
+	Server-->Client: Logon Failed
+	Client-->User: Logon Failed!
+else hashes match
+	Server->Server: Create Session ID GUID
+	Server->Database: Create Session Row (session id)
+	Database-->Server: Success
+	Server-->Client: Success(session id)
+	Client-->User: Logged On!
+end
+@enduml
